@@ -90,8 +90,7 @@ def _app_secret() -> str:
 def _redirect_uri() -> str:
     # Default: the API listens on 8765 and the OAuth callback is on /api/.
     # Earlier default was :3001 which was a leftover from the Atelier port.
-    return _credentials().get("OAUTH_REDIRECT_URI") or "http://localhost:8765/api/auth/callback"
-
+return _credentials().get("OAUTH_REDIRECT_URI") or "https://odylic-lens-production.up.railway.app/api/auth/callback"
 
 def _credentials_configured() -> bool:
     c = _credentials()
@@ -110,7 +109,7 @@ def _web_origin() -> str:
     # on :8765, so the web origin IS :8765. We previously defaulted to
     # :5173 (Vite dev) which left fresh installs with a "this site can't
     # be reached" after OAuth completed.
-    return os.environ.get("WEB_ORIGIN", "http://localhost:8765")
+    return os.environ.get("WEB_ORIGIN", "https://odylic-lens-el60gex44-vianaar-s-projects.vercel.app")
 
 
 def current_user_id(session_id: Optional[str]) -> Optional[str]:

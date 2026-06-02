@@ -33,8 +33,8 @@ export default function Setup({ auth }: { auth: AuthStatus | null }) {
     // Production-mode default: same-origin API on :8765. The hardcoded
     // :3001 fallback was a leftover from the Atelier port and caused
     // users to register a callback that didn't exist.
-    auth?.redirect_uri || `${window.location.protocol}//${window.location.hostname}:8765/api/auth/callback`
-  );
+auth?.redirect_uri ||
+`https://odylic-lens-production.up.railway.app/api/auth/callback`  );
 
   return (
     // Wrapper provides the page-frame: side gutters on small screens,
