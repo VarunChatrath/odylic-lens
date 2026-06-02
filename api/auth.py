@@ -87,10 +87,13 @@ def _app_secret() -> str:
     return v
 
 
+# def _redirect_uri() -> str:
+#     # Default: the API listens on 8765 and the OAuth callback is on /api/.
+#     # Earlier default was :3001 which was a leftover from the Atelier port.
+#  _credentials().get("OAUTH_REDIRECT_URI") or "https://odylic-lens-production.up.railway.app/api/auth/callback"
+
 def _redirect_uri() -> str:
-    # Default: the API listens on 8765 and the OAuth callback is on /api/.
-    # Earlier default was :3001 which was a leftover from the Atelier port.
- _credentials().get("OAUTH_REDIRECT_URI") or "https://odylic-lens-production.up.railway.app/api/auth/callback"
+    return _credentials().get("OAUTH_REDIRECT_URI") or "https://odylic-lens-production.up.railway.app/api/auth/callback"
 
 def _credentials_configured() -> bool:
     c = _credentials()
