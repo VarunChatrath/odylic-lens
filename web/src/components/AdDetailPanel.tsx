@@ -163,7 +163,7 @@ function fmtDate(s: any) {
 
 function fmt$(n: number): string {
   if (n === null || n === undefined || Number.isNaN(n)) return '-'
-  if (Math.abs(n) >= 1000) return `$${n.toLocaleString('en-US', { maximumFractionDigits: 0 })}`
+  if (Math.abs(n) >= 1000) return `$${n.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`
   return `$${n.toFixed(2)}`
 }
 function fmtPct(n: number) {
@@ -172,7 +172,7 @@ function fmtPct(n: number) {
 }
 function fmtNum(n: number) {
   if (n === null || n === undefined || Number.isNaN(n)) return '-'
-  return n.toLocaleString('en-US', { maximumFractionDigits: 0 })
+  return n.toLocaleString('en-IN', { maximumFractionDigits: 0 })
 }
 function fmtDec(n: number) {
   if (n === null || n === undefined || Number.isNaN(n)) return '-'
@@ -270,13 +270,27 @@ const DETAIL_GROUPS: { name: string; metrics: DetailMetric[] }[] = [
 
 function formatDetailValue(val: any, format: DetailFormat): string {
   if (val === undefined || val === null || Number.isNaN(Number(val))) return '-'
+
   const n = Number(val)
+
   switch (format) {
-    case 'dollar': return fmt$(n)
-    case 'percent': return fmtPct(n)
-    case 'decimal': return fmtDec(n)
-    case 'seconds': return `${n.toFixed(1)}s`
-    default: return fmtNum(n)
+    case 'dollar':
+      return `₹${n.toLocaleString('en-IN', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      })}`
+
+    case 'percent':
+      return fmtPct(n)
+
+    case 'decimal':
+      return fmtDec(n)
+
+    case 'seconds':
+      return `${n.toFixed(1)}s`
+
+    default:
+      return fmtNum(n)
   }
 }
 

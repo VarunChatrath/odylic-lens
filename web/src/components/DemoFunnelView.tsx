@@ -475,7 +475,7 @@ export function DemoFunnelView({ ads, brand, start, end, onOpen }: Props) {
               >
                 {cs.cohort.label}
                 <span className="font-normal text-neutral-400 ml-3" style={{ fontSize: 11 }}>
-                  ${(cs.cohort.spend).toLocaleString('en-US', { maximumFractionDigits: 0 })} spend ·
+                  ${(cs.cohort.spend).toLocaleString('en-IN', { maximumFractionDigits: 0 })} spend ·
                   {' '}{cs.cohort.purchases.toLocaleString()} purchases ·
                   {' '}med freq {cs.medFreq.toFixed(2)} · med CPMR ${cs.medCpmr.toFixed(2)}
                 </span>

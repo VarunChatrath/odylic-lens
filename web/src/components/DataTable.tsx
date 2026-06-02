@@ -117,10 +117,13 @@ function formatValue(value: number | null | undefined, format: string): string {
   if (value === null || value === undefined) return '-'
   switch (format) {
     case 'dollar':
-      return value >= 1000 ? `$${value.toLocaleString('en-US', { maximumFractionDigits: 0 })}` :
-             value >= 1 ? `$${value.toFixed(2)}` : `$${value.toFixed(2)}`
+  return value >= 1000
+    ? `₹${value.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`
+    : value >= 1
+      ? `₹${value.toFixed(2)}`
+      : `₹${value.toFixed(2)}`
     case 'number':
-      return value.toLocaleString('en-US', { maximumFractionDigits: 0 })
+      return value.toLocaleString('en-IN', { maximumFractionDigits: 0 })
     case 'percent':
       return `${value.toFixed(2)}%`
     case 'decimal':

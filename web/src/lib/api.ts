@@ -271,7 +271,7 @@ export function daysAgoIso(n: number): string {
   d.setDate(d.getDate() - n);
   return d.toISOString().slice(0, 10);
 }
-export function formatCurrency(n: number | null | undefined, currency = "USD"): string {
+export function formatCurrency(n: number | null | undefined, currency = "INR"): string {
   if (n == null || isNaN(n)) return "—";
   try {
     return new Intl.NumberFormat(undefined, { style: "currency", currency, maximumFractionDigits: 0 }).format(n);

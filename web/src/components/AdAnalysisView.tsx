@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import Fuse from 'fuse.js'
 import {
   Loader2, Play, RefreshCw,
   LayoutGrid, BarChart3, LineChart as LineIcon, Table2, ChevronDown,
@@ -271,6 +272,7 @@ const DEFAULT_METRICS = ['campaign_name', 'effective_status', 'spend', 'roas', '
 const DEFAULT_CARD_METRIC_KEYS = ['spend', 'roas', 'ctr', 'cpm']
 const MAX_CHART_LINES = 10
 
+
 // Fields excluded from the global row search. ad_id / creative_hash are
 // long opaque identifiers (would produce spurious hits on short queries);
 // image/thumbnail/video urls are binary-ish and noisy; asset_type /
@@ -333,14 +335,14 @@ const COLORS = [
   '#0891b2', '#ca8a04', '#be185d', '#0d9488', '#4b5563',
 ]
 
-function fmt$(n: number): string {
+function fmtCurrency(n: number): string {
   if (n === null || n === undefined || Number.isNaN(n)) return '-'
-  if (n >= 1000) return `$${n.toLocaleString('en-US', { maximumFractionDigits: 0 })}`
-  return `$${n.toFixed(2)}`
+  if (n >= 1000) return `₹${n.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`
+  return `₹${n.toFixed(2)}`
 }
 function fmtNum(n: number): string {
   if (n === null || n === undefined || Number.isNaN(n)) return '-'
-  return n.toLocaleString('en-US', { maximumFractionDigits: 0 })
+  return n.toLocaleString('en-IN', { maximumFractionDigits: 0 })
 }
 function fmtPct(n: number): string {
   if (n === null || n === undefined || Number.isNaN(n)) return '-'
@@ -359,7 +361,7 @@ function fmtMetric(v: number | undefined | null, def: MetricDef): string {
   if (v === null || v === undefined) return '-'
   const n = Number(v)
   if (Number.isNaN(n)) return '-'
-  if (def.format === 'dollar') return fmt$(n)
+ if (def.format === 'dollar') return fmtCurrency(n)
   if (def.format === 'percent') return fmtPct(n)
   if (def.format === 'decimal') return fmtDec(n)
   return fmtNum(n)
@@ -696,6 +698,7 @@ export function Thumbnail({
   const [loaded, setLoaded] = useState(false)
   const [terminallyBroken, setTerminallyBroken] = useState(false)
   const [nonce, setNonce] = useState(0)
+
   // Number of times we've cycled the full chain after a terminal failure.
   // Image resolution can fail transiently (Meta rate limits, signature
   // mismatch, prefetch hasn't populated cache yet); the user reported
@@ -923,6 +926,7 @@ const PLANNER_STATUSES = [
 // Dimension field catalog for the filter popover. Static lists carry their
 // own options; the rest resolve via `getOptions` at render time.
 const DIMENSION_FIELDS: DimensionFieldDef[] = [
+  { key: 'creative_name', label: 'Ad Asset Name' },
   { key: 'campaign_name', label: 'Campaign' },
   { key: 'adset_name', label: 'Ad Set' },
   { key: 'ad_name', label: 'Ad Name' },
@@ -938,6 +942,8 @@ const DIMENSION_FIELDS: DimensionFieldDef[] = [
   { key: 'nc_bidding', label: 'Bidding (adset)' },
   { key: 'nc_audience', label: 'Audience (adset)' },
   { key: 'nc_concept', label: 'Concept (name)' },
+  { key: 'property_type', label: 'Property Type' },
+{ key: 'location_name', label: 'Location' },
   // AI analysis
   { key: 'analysis_angle', label: 'Angle' },
   { key: 'analysis_persona', label: 'Persona' },
@@ -955,6 +961,8 @@ const DIMENSION_FIELDS: DimensionFieldDef[] = [
 // Pretty label for the currently active group-by dimension.
 function groupByLabel(k: GroupByKey): string {
   switch (k) {
+    case 'creative_name':
+  return 'Ad Asset Name'
     case 'campaign_name': return 'Campaign'
     case 'adset_name': return 'Ad Set'
     case 'ad_name': return 'Ad Name'
@@ -1319,6 +1327,9 @@ export function AdAnalysisView({ brand, start, end, compareStart, compareEnd, sn
   })
   const [metricPickerOpen, setMetricPickerOpen] = useState(false)
   const [metricSearch, setMetricSearch] = useState('')
+  const [creativeSearch, setCreativeSearch] = useState('')
+  const [propertyType, setPropertyType] = useState('all')
+const [location, setLocation] = useState('all')
   const metricMenuRef = useRef<HTMLDivElement>(null)
 
   // Timeseries data. loaded lazily when user switches to Line view
@@ -1981,7 +1992,8 @@ export function AdAnalysisView({ brand, start, end, compareStart, compareEnd, sn
   // datasets cap at ~120 ads.
   const uniqueDimensionValues = useMemo(() => {
     const baseKeys = [
-      'campaign_name', 'adset_name', 'ad_name',
+     'creative_name', 'campaign_name', 'adset_name', 'ad_name', 'property_type',
+  'location_name',
       // Legacy backend-parsed name fields (kept for back-compat with old datasets)
       'nc_objective', 'nc_format', 'nc_type', 'nc_funnel',
       'nc_persona_hint', 'nc_owner', 'nc_bidding', 'nc_audience', 'nc_concept',
@@ -1999,7 +2011,39 @@ export function AdAnalysisView({ brand, start, end, compareStart, compareEnd, sn
     for (const k of keys) {
       const set = new Set<string>()
       for (const a of adsWithAnalysis) {
-        const v = (a as any)[k]
+        let v = (a as any)[k]
+
+if (k === 'property_type') {
+  const text =
+    `${a.ad_name || ''} ${a.campaign_name || ''} ${a.adset_name || ''}`
+      .toLowerCase()
+
+  if (text.includes('villa')) v = 'Villa'
+  else if (text.includes('apartment')) v = 'Apartment'
+  else if (text.includes('plot')) v = 'Plot'
+  else if (text.includes('penthouse')) v = 'Penthouse'
+  else v = 'Other'
+}
+
+if (k === 'location_name') {
+  const campaignName = String(a.campaign_name || '').toLowerCase()
+
+  if (campaignName.includes('pro_goa')) {
+    v = 'Goa'
+  }
+  else if (campaignName.includes('pro_kasauli')) {
+    v = 'Kasauli'
+  }
+  else if (
+    campaignName.includes('pro_srilanka') ||
+    campaignName.includes('pro_sri_lanka')
+  ) {
+    v = 'Sri Lanka'
+  }
+  else {
+    v = 'Other'
+  }
+}
         if (v === undefined || v === null || v === '') continue
         set.add(String(v))
       }
@@ -2008,7 +2052,8 @@ export function AdAnalysisView({ brand, start, end, compareStart, compareEnd, sn
     return out
   }, [adsWithAnalysis, namingExtraDimensions])
 
-  const getDimensionOptions = (field: string): string[] => uniqueDimensionValues[field] || []
+  const getDimensionOptions = (field: string): string[] =>
+  uniqueDimensionValues[field] || []
 
   // Numeric metrics available to the metric filter popover. analysis text
   // columns are excluded (those filter via dimensions instead). Dedup by
@@ -2077,6 +2122,69 @@ export function AdAnalysisView({ brand, start, end, compareStart, compareEnd, sn
       list = list.filter(a => matchesFilters(a as any, metricFilters, metricJoin))
     }
 
+// Property Type Filter
+if (propertyType !== 'all') {
+  list = list.filter(a =>
+    `${a.ad_name || ''} ${a.campaign_name || ''} ${a.adset_name || ''}`
+      .toLowerCase()
+      .includes(propertyType.toLowerCase())
+  )
+}
+
+// Location Filter
+if (location !== 'all') {
+  list = list.filter(a =>
+    `${a.ad_name || ''} ${a.campaign_name || ''} ${a.adset_name || ''}`
+      .toLowerCase()
+      .includes(location.toLowerCase())
+  )
+}
+
+// Smart creative search
+if (creativeSearch.trim()) {
+  const q = creativeSearch.trim().toLowerCase()
+
+  const searchable = (a: any) =>
+    [
+      a.ad_name,
+      a.campaign_name,
+      a.adset_name,
+    ]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase()
+
+  // If search contains a number, use exact phrase matching
+  if (/\d/.test(q)) {
+    const normalize = (s: string) =>
+      s
+        .toLowerCase()
+        .replace(/(\d)\s*bhk/g, '$1bhk')
+        .replace(/\s+/g, ' ')
+
+    const normalizedQuery = normalize(q)
+
+    list = list.filter(a => {
+      const text = normalize(searchable(a))
+      return text.includes(normalizedQuery)
+    })
+  } else {
+    // Normal fuzzy search for text-only queries
+    const fuse = new Fuse(list, {
+      keys: [
+        'ad_name',
+        'campaign_name',
+        'adset_name',
+      ],
+      threshold: 0.25,
+      ignoreLocation: true,
+      minMatchCharLength: 2,
+    })
+
+    list = fuse.search(q).map(r => r.item)
+  }
+}
+
     // String sorts for ad_name / created_time, numeric for everything else.
     const stringSortKeys = new Set(['ad_name', 'created_time', 'campaign_name', 'adset_name'])
     list.sort((a, b) => {
@@ -2091,7 +2199,22 @@ export function AdAnalysisView({ brand, start, end, compareStart, compareEnd, sn
       return sortDir === 'desc' ? bv - av : av - bv
     })
     return list
-  }, [adsWithAnalysis, sort, sortDir, dimRules, dimJoin, metricFilters, metricJoin, selectedId, quickStatus, velocityFilter, velocitySets])
+  }, [
+  adsWithAnalysis,
+  sort,
+  sortDir,
+  dimRules,
+  dimJoin,
+  metricFilters,
+  metricJoin,
+  selectedId,
+  quickStatus,
+  velocityFilter,
+  velocitySets,
+  creativeSearch,
+  propertyType,
+  location,
+])
 
   // IMPORTANT: read from `adsWithAnalysis`, NOT raw `ads`.
   // adsWithAnalysis runs through withCustomMetrics + analysis-field merge
@@ -2127,7 +2250,7 @@ export function AdAnalysisView({ brand, start, end, compareStart, compareEnd, sn
   const chartAds = useMemo(() => {
     if (isGrouped) return [] as AdCreative[]
     if (checkedAds.length) return checkedAds
-    return filteredAds.slice(0, 8)
+    return filteredAds
   }, [checkedAds, filteredAds, isGrouped])
 
   const toggleAd = (id: string) => {
@@ -2356,7 +2479,7 @@ export function AdAnalysisView({ brand, start, end, compareStart, compareEnd, sn
             so the segmented control next to it doesn't slide when the
             title text changes length. */}
         <h2 className="font-display text-base font-medium w-[160px] shrink-0">
-          {atriaMode ? 'Creative Search' : 'Creative Analysis'}
+          Creative Analysis
         </h2>
 
         {/* Apple-style segmented control. two icon-only states. The
@@ -2383,21 +2506,9 @@ export function AdAnalysisView({ brand, start, end, compareStart, compareEnd, sn
                   : 'text-text-muted hover:text-text-secondary'
               }`}
             >
-              <BarChart3 size={12} />
+              
             </button>
-            <button
-              role="tab"
-              aria-selected={atriaMode}
-              onClick={() => setAtriaMode(true)}
-              title="Search ~25M ads across Meta + TikTok"
-              className={`p-1.5 rounded-full transition-colors ${
-                atriaMode
-                  ? 'bg-white text-text-primary shadow-[0_1px_2px_rgba(0,0,0,0.06)]'
-                  : 'text-text-muted hover:text-text-secondary'
-              }`}
-            >
-              <Search size={12} />
-            </button>
+           
           </div>
         )}
 
@@ -2471,12 +2582,12 @@ export function AdAnalysisView({ brand, start, end, compareStart, compareEnd, sn
           the entire local-creative body. We still render the header above
           so the user can toggle back; everything below (filters, charts,
           detail panel) is suppressed to avoid two competing scroll areas. */}
-      {atriaMode ? (
-        <AtriaExploreView
-          brandName={brand}
-          onClose={() => setAtriaMode(false)}
-        />
-      ) : false ? null : (
+      {false ? (
+  <AtriaExploreView
+    brandName={brand}
+    onClose={() => setAtriaMode(false)}
+  />
+) : (
       <>
 
       {error && (
@@ -2597,6 +2708,20 @@ export function AdAnalysisView({ brand, start, end, compareStart, compareEnd, sn
           )
         })()}
         <GroupByPill value={groupBy} onChange={setGroupBy} extraFields={namingExtraGroupBy} />
+        <div className="relative">
+  <Search
+    size={11}
+    className="absolute left-2 top-1/2 -translate-y-1/2 text-text-muted"
+  />
+
+  <input
+    type="text"
+    value={creativeSearch}
+    onChange={(e) => setCreativeSearch(e.target.value)}
+    placeholder="Search creatives..."
+    className="h-7 pl-7 pr-3 rounded-full border border-black/[0.08] bg-white text-[11px]"
+  />
+</div>
 
         {/* Sort pill. explicit alongside Group By per user request. Default
             spend desc, persisted to localStorage in the existing useEffect.
@@ -2957,15 +3082,7 @@ export function AdAnalysisView({ brand, start, end, compareStart, compareEnd, sn
             else { setSort(k); setSortDir('desc') }
           }}
         />
-      ) : chartMode === 'bar' ? (
-        <BarChartView
-          ads={chartAds}
-          metricDefs={metricDefs}
-          usingSelection={checkedAds.length > 0}
-          onOpen={id => setSelectedId(id)}
-          brand={brand}
-        />
-      ) : chartMode === 'scatter' ? (
+      )  : chartMode === 'scatter' ? (
         <DotPlotView
           ads={chartAds}
           onOpen={id => setSelectedId(id)}
@@ -3995,13 +4112,16 @@ const ALL_WIDGETS: { key: DashboardWidget; label: string; hint: string }[] = [
   { key: 'velocity', label: 'Velocity scorecards', hint: 'New launched · scaling · winners · losers' },
   { key: 'kpi_strip', label: 'KPI strip', hint: 'Spend · Revenue · ROAS · Purchases · CTR' },
   { key: 'top_grid',  label: 'Top creatives (grid)', hint: 'Best 6 ads by ROAS as a mini-mosaic' },
-  { key: 'top_table', label: 'Top performers (table)', hint: 'Top 10 by spend with key metrics' },
+  { key: 'top_table', label: 'Top performers (table)', hint: 'All Ads by spend with key metrics' },
 ]
 const DEFAULT_DASH_WIDGETS: DashboardWidget[] = ['velocity', 'kpi_strip', 'top_grid', 'top_table']
 
 // Default KPI metrics for the KPI-strip widget. User-configurable per-tile
 // in edit mode. pick any numeric metric for any cell.
-const DEFAULT_KPI_KEYS = ['spend', 'revenue', 'roas', 'purchases', 'ctr', 'cpa']
+const DEFAULT_KPI_KEYS = [
+  'spend',
+  'ctr'
+]
 
 // 6-dot grip icon used as the drag handle on dashboard widget tiles.
 function DragGripIcon() {
@@ -5307,8 +5427,11 @@ function CustomDashboardView({ ads, chartAds, metricDefs, brand, onOpen, velocit
       // Numeric metrics are user-pickable per cell (defined outside the
       // render switch to avoid recreating on every render).
       return (
-        <div className="grid grid-cols-2 md:grid-cols-6 gap-2">
-          {kpiKeys.map((k, i) => {
+        <div className="grid grid-cols-2 gap-2">
+          {kpiKeys.filter(k =>
+    k === 'spend' ||
+    k === 'ctr' 
+  ).map((k, i) => {
             const { value, def } = kpiValueFor(k)
             return (
               <div key={i} className="atelier-tile relative">
@@ -5349,7 +5472,7 @@ function CustomDashboardView({ ads, chartAds, metricDefs, brand, onOpen, velocit
       return (
         <div>
           <div className="text-[10px] uppercase tracking-widest text-text-muted font-medium mb-2">
-            Top performers (by ROAS, ≥$50 spend)
+            Top performers 
           </div>
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2">
             {top6.map(a => (
@@ -5373,43 +5496,146 @@ function CustomDashboardView({ ads, chartAds, metricDefs, brand, onOpen, velocit
         </div>
       )
     }
+    const [tableSort, setTableSort] = useState<'ctr' | 'leads' | 'spend'>('spend')
+const [tableSortDir, setTableSortDir] = useState<'asc' | 'desc'>('desc')
+
     if (key === 'top_table') {
       return (
         <div>
           <div className="text-[10px] uppercase tracking-widest text-text-muted font-medium mb-2">
-            Top 10 by spend
+            All Ads by spend
           </div>
           <div className="atelier-tile p-0 overflow-hidden">
             <table className="w-full text-[12px]">
               <thead>
                 <tr className="border-b border-black/[0.06]">
                   <th className="text-left px-3 py-2 text-[10px] uppercase tracking-widest text-text-muted font-medium">Ad</th>
-                  {metricDefs.slice(0, 4).map(m => (
-                    <th key={String(m.key)} className="text-right px-3 py-2 text-[10px] uppercase tracking-widest text-text-muted font-medium">
-                      {m.label}
-                    </th>
+                  {metricDefs .filter(m =>
+  ['ctr', 'leads', 'spend'].includes(String(m.key))
+).slice(0, 4).map(m => (
+                    <th
+  key={String(m.key)}
+  onClick={() => {
+    const key = String(m.key) as 'ctr' | 'leads' | 'spend'
+
+    if (tableSort === key) {
+      setTableSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    } else {
+      setTableSort(key)
+      setTableSortDir('desc')
+    }
+  }}
+  className="text-right px-3 py-2 text-[10px] uppercase tracking-widest text-text-muted font-medium cursor-pointer"
+>
+  {m.label}
+
+  {tableSort === m.key && (
+    <span className="ml-1">
+      {tableSortDir === 'asc' ? '↑' : '↓'}
+    </span>
+  )}
+</th>
                   ))}
                 </tr>
               </thead>
+              
               <tbody>
-                {[...chartAds].sort((a, b) => Number(b.spend || 0) - Number(a.spend || 0)).slice(0, 10).map(a => (
-                  <tr key={a.ad_id} onClick={() => onOpen(a.ad_id)} className="border-b border-black/[0.03] hover:bg-white/40 cursor-pointer">
-                    <td className="px-3 py-1.5 truncate max-w-[280px]" title={a.ad_name || a.ad_id}>
-                      {a.ad_name || a.ad_id}
-                    </td>
-                    {metricDefs.slice(0, 4).map(m => {
-                      const raw = (a as any)[m.key]
-                      const prev = (a as any)[`prev_${m.key}`]
-                      return (
-                        <td key={String(m.key)} className="text-right px-3 py-1.5 tabular-nums text-text-secondary">
-                          {fmtMetric(raw, m)}
-                          <DeltaChip current={Number(raw)} prev={prev} metricKey={String(m.key)} />
-                        </td>
-                      )
-                    })}
-                  </tr>
-                ))}
-              </tbody>
+                {[...chartAds].sort((a, b) => {
+  const av = Number((a as any)[tableSort] || 0)
+  const bv = Number((b as any)[tableSort] || 0)
+
+  return tableSortDir === 'desc'
+    ? bv - av
+    : av - bv
+}).map(a => (
+                   <tr key={a.ad_id} onClick={() => onOpen(a.ad_id)} className="border-b border-black/[0.03] hover:bg-white/40 cursor-pointer">
+      <td className="px-3 py-1.5 truncate max-w-[280px]" title={a.ad_name || a.ad_id}>
+        {a.ad_name || a.ad_id}
+      </td>
+
+      {metricDefs.filter(m =>
+  ['ctr', 'leads', 'spend'].includes(String(m.key))
+).slice(0, 4).map(m => {
+        const raw = (a as any)[m.key]
+        const prev = (a as any)[`prev_${m.key}`]
+
+        return (
+          <td key={String(m.key)} className="text-right px-3 py-1.5 tabular-nums text-text-secondary">
+            {fmtMetric(raw, m)}
+            <DeltaChip current={Number(raw)} prev={prev} metricKey={String(m.key)} />
+          </td>
+        )
+      })}
+    </tr>
+  ))}
+
+  {/* TOTAL ROW */}
+  <tr className="border-t-2 border-black/[0.12] font-semibold bg-black/[0.02]">
+    <td className="px-3 py-2">
+      TOTAL / AVG
+    </td>
+
+    {/* {metricDefs.slice(0, 4).map(m => {
+      const total = chartAds.reduce(
+        (sum, a) => sum + Number((a as any)[m.key] || 0),
+        0
+      )
+
+      return (
+        <td
+          key={`total-${String(m.key)}`}
+          className="text-right px-3 py-2"
+        >
+          {fmtMetric(total, m)}
+        </td>
+      )
+    })} */}
+
+    {metricDefs.filter(m =>
+  ['ctr', 'leads', 'spend'].includes(String(m.key))
+).slice(0, 4).map(m => {
+      if (m.key === 'purchases') {
+  return (
+    <td
+      key={`total-${String(m.key)}`}
+      className="text-right px-3 py-2"
+    >
+      -
+    </td>
+  )
+}
+
+  let value: number
+
+  // Average CTR instead of summing CTRs
+  if (m.key === 'ctr') {
+    const ctrValues = chartAds
+      .map(a => Number((a as any).ctr || 0))
+      .filter(v => !Number.isNaN(v))
+
+    value = ctrValues.length
+      ? ctrValues.reduce((sum, v) => sum + v, 0) / ctrValues.length
+      : 0
+  } else {
+    // Sum everything else
+    value = chartAds.reduce(
+      (sum, a) => sum + Number((a as any)[m.key] || 0),
+      0
+    )
+  }
+
+  return (
+    <td
+      key={`total-${String(m.key)}`}
+      className="text-right px-3 py-2"
+    >
+      {fmtMetric(value, m)}
+    </td>
+  )
+})}
+  </tr>
+
+</tbody>
             </table>
           </div>
         </div>
@@ -5570,7 +5796,7 @@ function CustomDashboardView({ ads, chartAds, metricDefs, brand, onOpen, velocit
 // winner_threshold / loser_threshold are interpreted in the units of
 // the chosen metric (ratio for ROAS, $ for CPA, percentile 0-100 for
 // spend_pct). The number inputs in the popover swap units to match.
-export type VelocityClassifyMetric = 'roas' | 'cpa' | 'spend_pct'
+export type VelocityClassifyMetric = 'roas' | 'spend_pct'
 
 type VelocityThresholds = {
   // Common
@@ -5607,8 +5833,7 @@ const DEFAULT_THRESHOLDS: VelocityThresholds = {
 // classify_by (so flipping from ROAS → CPA doesn't leave a "≥ 1.5"
 // CPA threshold sitting there silently filtering out everything).
 const CLASSIFY_BY_DEFAULTS: Record<VelocityClassifyMetric, { winner: number; loser: number }> = {
-  roas:      { winner: 1.5, loser: 0.7 },
-  cpa:       { winner: 25,  loser: 75 },     // $/purchase. winner ≤ $25, loser ≥ $75
+  roas:      { winner: 1.5, loser: 0.7 },    // $/purchase. winner ≤ $25, loser ≥ $75
   spend_pct: { winner: 80,  loser: 20 },     // percentile cutoffs
 }
 
@@ -5653,19 +5878,15 @@ export function velocityBucketDefinition(
   }
   if (label === 'Scaling') {
     return `Current spend ≥ ${t.scaling_spend_delta_pct.toFixed(0)}% over the previous period ` +
-      `(min $${t.scaling_min_prev_spend} of prior spend to qualify).`
+      `(min ₹${t.scaling_min_prev_spend} of prior spend to qualify).`
   }
-  const minSpend = `, min $${t.min_spend} spend`
+  const minSpend = `, min ₹${t.min_spend} spend`
   if (t.classify_by === 'roas') {
     return label === 'Winners'
       ? `Top ${t.top_pct}% by ROAS, ROAS ≥ ${t.winner_threshold.toFixed(2)}${minSpend}.`
       : `Bottom ${t.top_pct}% by ROAS, ROAS ≤ ${t.loser_threshold.toFixed(2)}${minSpend}.`
   }
-  if (t.classify_by === 'cpa') {
-    return label === 'Winners'
-      ? `Top ${t.top_pct}% by CPA (low → high), CPA ≤ $${t.winner_threshold.toFixed(0)}${minSpend}.`
-      : `Bottom ${t.top_pct}% by CPA, CPA ≥ $${t.loser_threshold.toFixed(0)}${minSpend}.`
-  }
+ 
   // spend_pct
   return label === 'Winners'
     ? `Spend in top ${100 - t.winner_threshold}% of the period (≥ p${t.winner_threshold} spend)${minSpend}.`
@@ -5677,15 +5898,7 @@ export function velocityBucketDefinition(
 // small (one place to mock ROAS/CPA/spend-percentile).
 function _velocityMetricValue(a: AdCreative, metric: VelocityClassifyMetric): number {
   if (metric === 'roas') return Number(a.roas || 0)
-  if (metric === 'cpa') {
-    // Prefer the explicit cpa metric attached by withCustomMetrics; fall
-    // back to spend/purchases. Ads with no purchases return Infinity so
-    // they sort to the loser end naturally.
-    const explicit = Number(a.cpa || 0)
-    if (explicit > 0) return explicit
-    const p = Number(a.purchases || 0)
-    return p > 0 ? Number(a.spend || 0) / p : Number.POSITIVE_INFINITY
-  }
+  
   // spend_pct. caller assigns a percentile rank, so we return raw spend
   // here and let the classifier do the percentile math once.
   return Number(a.spend || 0)
@@ -5738,19 +5951,13 @@ export function classifyVelocity(
     const v = metric === 'spend_pct'
       ? (pctByAd.get(ad.ad_id) ?? 0)
       : _velocityMetricValue(ad, metric)
-    const ok = metric === 'cpa'
-      ? v <= t.winner_threshold
-      : v >= t.winner_threshold
-    if (ok) winners.add(ad.ad_id)
+    
   }
   for (const { ad } of scored.slice(-sliceN)) {
     const v = metric === 'spend_pct'
       ? (pctByAd.get(ad.ad_id) ?? 0)
       : _velocityMetricValue(ad, metric)
-    const ok = metric === 'cpa'
-      ? v >= t.loser_threshold
-      : v <= t.loser_threshold
-    if (ok) losers.add(ad.ad_id)
+    
   }
 
   // Scaling: spend up X% vs prior period, with a $ floor on prior spend
@@ -5865,6 +6072,10 @@ function VelocityScorecards({ ads, brand, selected, onToggle, thresholds: extern
       }))
   }, [ads, thresholds])
 
+  const runningAdsCount = ads.filter(
+  a => (a.effective_status || '').toUpperCase() === 'ACTIVE'
+).length
+
   // Switching classify_by snaps the winner/loser cutoffs to sensible
   // defaults for the new metric. otherwise a ROAS-tuned "≥ 1.5" lingers
   // as a $1.50 CPA winner threshold and surprises nobody pleasantly.
@@ -5881,14 +6092,11 @@ function VelocityScorecards({ ads, brand, selected, onToggle, thresholds: extern
       return next
     })
   }
-  const classifyUnit = thresholds.classify_by === 'cpa'
-    ? '$'
-    : thresholds.classify_by === 'spend_pct'
+  const classifyUnit = 
+    thresholds.classify_by === 'spend_pct'
       ? 'p'
       : ''
-  const classifyLabel = thresholds.classify_by === 'cpa'
-    ? 'CPA'
-    : thresholds.classify_by === 'spend_pct'
+  const classifyLabel = thresholds.classify_by === 'spend_pct'
       ? 'Spend percentile'
       : 'ROAS'
 
@@ -5926,7 +6134,7 @@ function VelocityScorecards({ ads, brand, selected, onToggle, thresholds: extern
             <div className="flex flex-wrap gap-1">
               {([
                 { key: 'roas',      label: 'ROAS', hint: 'Return on ad spend (higher = better)' },
-                { key: 'cpa',       label: 'Cost per Action', hint: '$/purchase (lower = better)' },
+                
                 { key: 'spend_pct', label: 'Spend percentile', hint: 'Rank by spend within the period' },
               ] as const).map(o => {
                 const active = thresholds.classify_by === o.key
@@ -5949,7 +6157,7 @@ function VelocityScorecards({ ads, brand, selected, onToggle, thresholds: extern
           </div>
 
           <div className="grid grid-cols-2 gap-2">
-            <ThresholdField
+            {/* <ThresholdField
               label={`Winners ${thresholds.classify_by === 'cpa' ? '≤' : '≥'}`}
               suffix={classifyUnit}
               value={thresholds.winner_threshold}
@@ -5964,8 +6172,8 @@ function VelocityScorecards({ ads, brand, selected, onToggle, thresholds: extern
               onChange={v => updateThreshold('loser_threshold', v)}
               step={thresholds.classify_by === 'roas' ? 0.1 : 1}
               hint={`${classifyLabel} ceiling for Loser bucket`}
-            />
-            <ThresholdField label="Min spend" suffix="$" value={thresholds.min_spend}
+            /> */}
+            <ThresholdField label="Min spend" suffix="₹" value={thresholds.min_spend}
               onChange={v => updateThreshold('min_spend', v)} hint="Floor for Winner/Loser eligibility" />
             <ThresholdField label="Top / Bottom %" suffix="%" value={thresholds.top_pct}
               onChange={v => updateThreshold('top_pct', v)} hint="Winners are top X% / Losers are bottom X%" />
@@ -5977,7 +6185,7 @@ function VelocityScorecards({ ads, brand, selected, onToggle, thresholds: extern
               value={thresholds.scaling_spend_delta_pct}
               onChange={v => updateThreshold('scaling_spend_delta_pct', Math.max(0, v))}
               hint="Current spend up at least this % over the previous period" />
-            <ThresholdField label="Scaling min prev spend" suffix="$"
+            <ThresholdField label="Scaling min prev spend" suffix="₹"
               value={thresholds.scaling_min_prev_spend}
               onChange={v => updateThreshold('scaling_min_prev_spend', v)}
               hint="Ignore scaling-from-pennies edge cases" />
@@ -5991,8 +6199,19 @@ function VelocityScorecards({ ads, brand, selected, onToggle, thresholds: extern
         </div>
       )}
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-        {buckets.map(b => {
+      <div className="grid grid-cols-2 gap-2">
+         <div className="atelier-tile">
+    <div className="text-[10px] uppercase tracking-widest text-text-muted font-medium">
+      Ads Running
+    </div>
+
+    <div className="font-display text-2xl font-medium tabular-nums mt-0.5">
+      {runningAdsCount}
+    </div>
+  </div>
+        {buckets.filter(b =>
+    b.label === 'New Launched' 
+  ).map(b => {
           const isActive = selected?.has(b.label as VelocityBucketLabel) || false
           const clickable = !!onToggle
           const helper = clickable
@@ -6888,7 +7107,7 @@ export function fmtAxis(v: any, def: MetricDef | undefined, showCurrency: boolea
   else if (abs >= 1_000) core = (n / 1_000).toFixed(abs >= 10_000 ? 0 : 1) + 'k'
   else core = abs >= 10 || abs === 0 ? Math.round(n).toString() : n.toFixed(1)
   if (def && showCurrency) {
-    if (def.format === 'dollar') return '$' + core
+    if (def.format === 'dollar') return '₹' + core
     if (def.format === 'percent') return core + '%'
   }
   return core
@@ -7102,57 +7321,7 @@ function BarChartView({
           Showing top {ads.length} ads. Check boxes on creatives to compare a specific set.
         </div>
       )}
-      <div className="glass rounded-lg p-4" style={{ height: 500 }}>
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={data} margin={{ top: 10, right: hasRightAxis ? 40 : 20, left: 10, bottom: 80 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.06)" />
-            <XAxis dataKey="name" interval={0} height={80}
-              tick={<ThumbnailBarTick thumbMap={thumbMap} onOpen={onOpen} onToggleHidden={toggleHidden} brand={brand} />} />
-            <YAxis yAxisId="left" tick={{ fontSize: 10, fill: '#6b7280' }}
-              tickFormatter={(v) => fmtAxis(v, leftAxisDef, settings.showCurrency)} />
-            {hasRightAxis && (
-              <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 10, fill: '#6b7280' }}
-                tickFormatter={(v) => fmtAxis(v, rightAxisDef, settings.showCurrency)} />
-            )}
-            <Tooltip
-              formatter={(value: any, name: any) => {
-                const def = metricDefs.find(d => d.label === name || String(d.key) === name)
-                return [def ? fmtMetric(Number(value), def) : value, def?.label || name]
-              }}
-              contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid rgba(0,0,0,0.08)' }}
-            />
-            <Legend wrapperStyle={{ fontSize: 11 }} />
-            {metricDefs.map((m, i) => (
-              <Bar
-                key={String(m.key)}
-                dataKey={String(m.key)}
-                name={m.label}
-                yAxisId={rightKeys.has(String(m.key)) ? 'right' : 'left'}
-                fill={COLORS[i % COLORS.length]}
-              />
-            ))}
-            {/* Compare-period paired bars. one extra bar per metric,
-                styled with the same color but at 35% opacity + a
-                dashed stroke so it reads as "prior" without needing
-                a separate legend entry. legendType="none" keeps the
-                bottom strip from doubling in size. */}
-            {hasCompare && metricDefs.map((m, i) => (
-              <Bar
-                key={`prev:${String(m.key)}`}
-                dataKey={`prev:${String(m.key)}`}
-                name={`${m.label} · prior`}
-                yAxisId={rightKeys.has(String(m.key)) ? 'right' : 'left'}
-                fill={COLORS[i % COLORS.length]}
-                fillOpacity={0.35}
-                stroke={COLORS[i % COLORS.length]}
-                strokeDasharray="3 2"
-                strokeWidth={1}
-                legendType="none"
-              />
-            ))}
-          </BarChart>
-        </ResponsiveContainer>
-      </div>
+      
       <ChartSettingsButton settings={settings} onChange={setSettings} metricDefs={metricDefs} />
       {hiddenAds.length > 0 && (
         <div className="flex items-center flex-wrap gap-1.5 px-1 pt-1">

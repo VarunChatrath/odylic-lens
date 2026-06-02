@@ -26,13 +26,13 @@ def _make_payload(url: str, params: Optional[dict]) -> dict:
         return {
             "data": [
                 {
-                    "id": "act_1001", "name": "Acme Brand", "currency": "USD",
+                    "id": "act_1001", "name": "Acme Brand", "currency": "INR",
                     "timezone_name": "America/Los_Angeles", "account_status": 1,
                     "amount_spent": "123456",
                     "business": {"id": "biz_a", "name": "Acme Group"},
                 },
                 {
-                    "id": "act_1002", "name": "Beta Co", "currency": "USD",
+                    "id": "act_1002", "name": "Beta Co", "currency": "INR",
                     "timezone_name": "America/New_York", "account_status": 1,
                     "amount_spent": "45678",
                     "business": {"id": "biz_a", "name": "Acme Group"},
@@ -89,7 +89,7 @@ def _make_payload(url: str, params: Optional[dict]) -> dict:
     # Account meta object (GET /act_XXX)
     if url.rstrip("/").endswith(tuple(f"act_{n}" for n in (1001, 1002, 1003))):
         return {
-            "id": "act_1001", "name": "Acme Brand", "currency": "USD",
+            "id": "act_1001", "name": "Acme Brand", "currency": "INR",
             "timezone_name": "America/Los_Angeles", "account_status": 1,
         }
     return {"error": {"code": 999, "message": f"mock: no rule for {url}"}}

@@ -3020,16 +3020,16 @@ def quick_pull(
             continue
         # Money pattern: $1,234 or $1,234.56 or $123 or $  213.61 (with internal spaces).
         # The first 3 monetary tokens are spend / revenue / [aov hits later as well]
-        money_tokens = _re.findall(r"\$\s*[\d,]+(?:\.\d+)?", s)
+        money_tokens = _re.findall(r"\₹\s*[\d,]+(?:\.\d+)?", s)
         roas_match = _re.search(r"(\d+(?:\.\d+)?)x\b", s)
         # Find the integer 'orders' column. it sits between the roas value
         # and the trailing AOV ('$' prefix). Look for an integer that's NOT
         # adjacent to '$'.
-        orders_match = _re.search(r"\bx\s+(\d+)\s+\$", s)
+        orders_match = _re.search(r"\bx\s+(\d+)\s+\₹", s)
 
         def _to_money(tok: str) -> float | None:
             try:
-                return float(_re.sub(r"[\$,\s]", "", tok))
+                return float(_re.sub(r"[\₹,\s]", "", tok))
             except Exception:
                 return None
 
@@ -6585,13 +6585,13 @@ def generate_variants(
         perf_bits = []
         if perf:
             if perf.get("spend"):
-                perf_bits.append(f"spend ${perf['spend']:,.0f}")
+                perf_bits.append(f"spend ₹{perf['spend']:,.0f}")
             if perf.get("roas"):
                 perf_bits.append(f"ROAS {perf['roas']}")
             if perf.get("ctr"):
                 perf_bits.append(f"CTR {perf['ctr']}%")
             if perf.get("cpm"):
-                perf_bits.append(f"CPM ${perf['cpm']}")
+                perf_bits.append(f"CPM ₹{perf['cpm']}")
             if perf.get("purchases"):
                 perf_bits.append(f"{perf['purchases']} purchases")
         perf_str = ", ".join(perf_bits) if perf_bits else "n/a"

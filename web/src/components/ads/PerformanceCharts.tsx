@@ -76,12 +76,12 @@ const PLACEMENT_METRIC_LABEL: Record<PlacementMetric, string> = {
 }
 const PLACEMENT_METRIC_FMT: Record<PlacementMetric, (v: number) => string> = {
   roas: v => v.toFixed(2),
-  spend: v => `$${Math.round(v).toLocaleString()}`,
-  cpm: v => `$${v.toFixed(2)}`,
+  spend: v => `₹${Math.round(v).toLocaleString('en-IN')}`,
+  cpm: v => `₹${v.toFixed(2)}`,
   ctr: v => `${v.toFixed(2)}%`,
-  purchases: v => Math.round(v).toLocaleString(),
-  cpa: v => `$${Math.round(v).toLocaleString()}`,
-  impressions: v => Math.round(v).toLocaleString(),
+  purchases: v => Math.round(v).toLocaleString('en-IN'),
+  cpa: v => `₹${Math.round(v).toLocaleString('en-IN')}`,
+  impressions: v => Math.round(v).toLocaleString('en-IN'),
 }
 
 function shortPlacement(p: string): string {

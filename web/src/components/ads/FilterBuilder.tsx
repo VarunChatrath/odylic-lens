@@ -92,6 +92,37 @@ export function matchesFilters(
 // Read a dimension value off the row. `analysis_*` keys map directly on the
 // enriched ad rows (merged in the parent); everything else is a raw field.
 function readDimValue(row: Record<string, any>, field: string): string {
+
+  // Property Type
+  if (field === 'property_type') {
+    const text =
+      `${row.ad_name || ''} ${row.campaign_name || ''} ${row.adset_name || ''}`
+        .toLowerCase()
+
+    if (text.includes('villa')) return 'Villa'
+    if (text.includes('apartment')) return 'Apartment'
+    if (text.includes('plot')) return 'Plot'
+    if (text.includes('penthouse')) return 'Penthouse'
+
+    return 'Other'
+  }
+
+  // Location
+  if (field === 'location_name') {
+    const text =
+      `${row.ad_name || ''} ${row.campaign_name || ''} ${row.adset_name || ''}`
+        .toLowerCase()
+
+    if (text.includes('north goa')) return 'North Goa'
+    if (text.includes('south goa')) return 'South Goa'
+    if (text.includes('parra')) return 'Parra'
+    if (text.includes('assagao')) return 'Assagao'
+    if (text.includes('siolim')) return 'Siolim'
+    if (text.includes('anjuna')) return 'Anjuna'
+
+    return 'Other'
+  }
+
   const v = row[field]
   if (v === null || v === undefined) return ''
   return String(v)
@@ -531,7 +562,7 @@ const OPS: FilterOp[] = ['>', '>=', '<', '<=', '=', '!=']
 
 function unitLabel(unit?: MetricOption['unit']): string {
   switch (unit) {
-    case 'dollar': return '$'
+    case 'dollar': return '₹'
     case 'percent': return '%'
     case 'decimal': return 'x'
     default: return '#'

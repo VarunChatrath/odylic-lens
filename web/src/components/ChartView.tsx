@@ -34,13 +34,13 @@ function fmtValue(value: any, def?: MetricDef) {
   if (isNaN(n)) return value
   if (!def) return n.toLocaleString()
   if (def.format === 'dollar') {
-    return n >= 1000
-      ? `$${n.toLocaleString('en-US', { maximumFractionDigits: 0 })}`
-      : `$${n.toFixed(2)}`
-  }
+  return n >= 1000
+    ? `₹${n.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`
+    : `₹${n.toFixed(2)}`
+}
   if (def.format === 'percent') return `${n.toFixed(2)}%`
   if (def.format === 'decimal') return n.toFixed(2)
-  return n.toLocaleString('en-US', { maximumFractionDigits: 0 })
+  return n.toLocaleString('en-IN', { maximumFractionDigits: 0 })
 }
 
 export function ChartView({
